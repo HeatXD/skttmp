@@ -1,0 +1,12 @@
+[package]
+name = "payload"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+ctor = "0.2.6"
+detour = {version = "0.8.1", default-features = false}
