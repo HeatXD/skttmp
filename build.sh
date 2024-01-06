@@ -1,6 +1,7 @@
 # should be ran from project root.
 cd payload 
-cargo build --release
+cargo build 
 cd ../runner
-cargo build --release
-cargo run --release
+cargo build 
+sleep 1
+cargo run 

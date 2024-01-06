@@ -1,9 +1,10 @@
+use std::io::{Read, Write};
 use std::net::TcpListener;
 
-use dll_syringe::{Syringe, process::OwnedProcess};
 use color_eyre;
-use tracing::metadata::LevelFilter;
+use dll_syringe::{process::OwnedProcess, Syringe};
 use tracing::info;
+use tracing::metadata::LevelFilter;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -16,7 +17,7 @@ fn main() -> color_eyre::Result<()> {
         let this = OwnedProcess::find_first_by_name("ShovelKnight");
         match this {
             Some(process) => process,
-            None => panic!("Shovel Knight is not running")
+            None => panic!("Shovel Knight is not running"),
         }
     };
     info!("Found process called ShovelKnight");
@@ -32,17 +33,24 @@ fn main() -> color_eyre::Result<()> {
     info!("Injecting the payload into the target process");
     // inject the payload into the target process
     let _payload = {
-        let this = syringe.inject("./../payload/target/release/payload.dll");
+        let this = syringe.inject("./../payload/target/debug/payload.dll");
         match this {
             Ok(t) => t,
-            Err(e) => panic!("Failed to inject payload. err: {}", e)
+            Err(e) => panic!("Failed to inject payload. err: {}", e),
         }
     };
     info!("Injecting Successful!");
-    let (_stream, addr) = match listen.accept() {
+    let (mut stream, addr) = match listen.accept() {
         Ok(it) => it,
         Err(err) => panic!("{}", err),
     };
+
     info!("{} Accepted!", &addr);
+
+    let mut buf = vec![0u8; 1024];
+    let mut stdout = std::io::stdout();
+    while let Ok(n) = stream.read(&mut buf[..]) {
+        stdout.write(&buf[..n])?;
+    }
     Ok(())
 }
