@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-use std::net::TcpListener;
+use std::net::{TcpListener, SocketAddr};
 
 use color_eyre;
 use dll_syringe::{process::OwnedProcess, Syringe};
@@ -23,7 +23,11 @@ fn main() -> color_eyre::Result<()> {
     info!("Found process called ShovelKnight");
     // creating socket for communication
     info!("Creating communication socket");
-    let listen = match TcpListener::bind("127.0.0.1:7788") {
+    let addrs = [
+        SocketAddr::from(([127, 0, 0, 1], 6677)),
+        SocketAddr::from(([127, 0, 0, 1], 7788)),
+    ];
+    let listen = match TcpListener::bind(&addrs[..]) {
         Ok(it) => it,
         Err(err) => panic!("Failed to create communication socket err: {}", err),
     };
@@ -51,6 +55,7 @@ fn main() -> color_eyre::Result<()> {
     let mut stdout = std::io::stdout();
     while let Ok(n) = stream.read(&mut buf[..]) {
         stdout.write(&buf[..n])?;
+
     }
     Ok(())
 }
