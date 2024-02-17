@@ -1,9 +1,15 @@
 use std::collections::HashMap;
 
+use process_memory::{DataMember, Pid, TryIntoProcessHandle};
 use tracing::info;
 use winapi::{um::{libloaderapi::GetModuleHandleW, errhandlingapi::GetLastError, psapi::{GetModuleInformation, MODULEINFO}, processthreadsapi::GetCurrentProcess}, shared::minwindef::HINSTANCE__};
-// later maybe move this to a file based system. that way recompiling isnt needed.
 
+//this is bad practive but doing it for now.
+static mut MEMBERS: Option<HashMap<MemoryItem, DataMember<f32>>> = None;
+
+// general exploration of memory addresses
+
+// later maybe move this to a file based system. that way recompiling isnt needed.
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub enum MemoryItem {
     GoldShovelPlague, // gold value in Shovel of Hope and Plague of Shadows
@@ -15,24 +21,17 @@ pub enum MemoryItem {
     P2PosY,           // player 2 y position
 } 
 
-#[derive(PartialEq, Eq, Hash)]
-pub enum MemoryType {
-    I32,
-    U32,
-    F32, 
-}
-
-pub fn get_mem_locations(base_address: usize) -> HashMap<MemoryItem, (MemoryType, Vec<usize>)> {
-    let mut res: HashMap<MemoryItem, (MemoryType, Vec<usize>)> = HashMap::new();
+pub fn get_mem_locations(base_address: usize) -> HashMap<MemoryItem, Vec<usize>> {
+    let mut res: HashMap<MemoryItem, Vec<usize>> = HashMap::new();
     // mem position values
     // adding the memory type just 
-    res.insert(MemoryItem::GoldShovelPlague,(MemoryType::U32, vec![base_address + 0x9072CC, 0xEE4]));
-    res.insert(MemoryItem::GoldSpecter, (MemoryType::U32, vec![base_address + 0x90727C, 0xEE4]));
-    res.insert(MemoryItem::GoldKing, (MemoryType::U32, vec![base_address + 0x907B8C, 0xEE4]));
-    res.insert(MemoryItem::P1PosX, (MemoryType::F32, vec![base_address + 0x008DCB34, 0x80, 0x24, 0xC]));
-    res.insert(MemoryItem::P1PosY, (MemoryType::F32, vec![base_address + 0x008DCB34, 0x80, 0x24, 0x10]));
-    res.insert(MemoryItem::P2PosX, (MemoryType::F32, vec![base_address + 0x008D231C, 0x60, 0x24, 0xC]));
-    res.insert(MemoryItem::P2PosY, (MemoryType::F32, vec![base_address + 0x008DCB34, 0x80, 0x24, 0x290]));
+    res.insert(MemoryItem::GoldShovelPlague, vec![base_address + 0x9072CC, 0xEE4]); // uint
+    res.insert(MemoryItem::GoldSpecter,vec![base_address + 0x90727C, 0xEE4]); 
+    res.insert(MemoryItem::GoldKing,  vec![base_address + 0x907B8C, 0xEE4]);
+    res.insert(MemoryItem::P1PosX,  vec![base_address + 0x008DCB34, 0x80, 0x24, 0xC]); // f32
+    res.insert(MemoryItem::P1PosY,  vec![base_address + 0x008DCB34, 0x80, 0x24, 0x10]);
+    res.insert(MemoryItem::P2PosX,  vec![base_address + 0x008D231C, 0x60, 0x24, 0xC]);
+    res.insert(MemoryItem::P2PosY, vec![base_address + 0x008DCB34, 0x80, 0x24, 0x290]);
     // return mem map
     res
 }
@@ -70,4 +69,44 @@ pub fn get_base_addr_and_hook() -> Option<(usize, *mut HINSTANCE__)> {
     let base_address = module_info.lpBaseOfDll as usize;
 
     Some((base_address, module_handle))
+}
+
+pub fn collect_mem_items(base_address: usize) {
+    info!("Collecting Memory items");
+    unsafe {
+        let mut members: HashMap<MemoryItem, DataMember<f32>> = HashMap::new();
+        let handle = (std::process::id() as Pid)
+            .try_into_process_handle()
+            .unwrap();
+        let mem_items = get_mem_locations(base_address);
+        members.insert(
+            MemoryItem::P1PosX,
+            DataMember::<f32>::new_offset(
+                handle,
+                mem_items.get(&MemoryItem::P1PosX).unwrap().clone(),
+            ),
+        );
+        members.insert(
+            MemoryItem::P1PosY,
+            DataMember::<f32>::new_offset(
+                handle,
+                mem_items.get(&MemoryItem::P1PosY).unwrap().clone(),
+            ),
+        );
+        members.insert(
+            MemoryItem::P2PosX,
+            DataMember::<f32>::new_offset(
+                handle,
+                mem_items.get(&MemoryItem::P2PosX).unwrap().clone(),
+            ),
+        );
+        members.insert(
+            MemoryItem::P2PosY,
+            DataMember::<f32>::new_offset(
+                handle,
+                mem_items.get(&MemoryItem::P2PosY).unwrap().clone(),
+            ),
+        );
+        MEMBERS = Some(members);
+    }
 }
