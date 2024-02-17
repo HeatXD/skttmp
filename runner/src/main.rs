@@ -25,7 +25,6 @@ fn main() -> color_eyre::Result<()> {
     info!("Creating communication socket");
     let addrs = [
         SocketAddr::from(([127, 0, 0, 1], 6677)),
-        SocketAddr::from(([127, 0, 0, 1], 7788)),
     ];
     let listen = match TcpListener::bind(&addrs[..]) {
         Ok(it) => it,

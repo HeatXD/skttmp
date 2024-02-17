@@ -12,7 +12,6 @@ mod input;
 fn init() {
     let addrs = [
         SocketAddr::from(([127, 0, 0, 1], 6677)),
-        SocketAddr::from(([127, 0, 0, 1], 7788)),
     ];
     let stream = TcpStream::connect(&addrs[..]).unwrap();
 

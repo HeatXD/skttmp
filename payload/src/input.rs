@@ -1,14 +1,16 @@
-use std::rc::Rc;
+use std::{rc::Rc, thread, time::Duration};
 use tracing::info;
 use vigem_client::{Client, TargetId, XButtons, XGamepad, Xbox360Wired};
 
 const BUFFER_SIZE: i32 = 64;
 const DELAY: i32 = 5;
+const MAX_WAIT_TIME: u32 = 60 * 4 * 10; // 10 secs
 
 pub struct GameInput {
     frame: i32,
     input: u16,
 }
+
 impl GameInput {
     fn default() -> GameInput {
         Self {
@@ -40,10 +42,8 @@ impl GameInputQueue {
 
     fn has_input(&self, frame: i32) -> bool {
         if let Some(inp) = self.queue.get((frame % BUFFER_SIZE) as usize) {
-            info!("inp frame: {}", inp.frame);
             return frame == inp.frame;
         }
-
         false
     }
 
@@ -51,7 +51,6 @@ impl GameInputQueue {
         if let Some(inp) = self.queue.get((frame % BUFFER_SIZE) as usize) {
             return inp.input;
         }
-
         0
     }
 }
@@ -96,16 +95,17 @@ impl Default for GameInputHandler {
 
 impl GameInputHandler {
     pub fn on_hook_call(&mut self, ms: u32) -> u32 {
+        let mut wait_time = ms;
         self.current_frame += 1;
         if self.first_time {
             self.do_init_sequence();
         }
         if self.current_frame >= 0 && !self.first_time {
-            self.wait_input_available();
+            wait_time = self.wait_input_available(ms);
             self.apply_input();
         }
         info!("C:{}/{}", self.current_frame, self.current_frame / 60);
-        ms
+        wait_time
     }
 
     fn do_init_sequence(&mut self) {
@@ -143,19 +143,43 @@ impl GameInputHandler {
         }
     }
 
-    fn wait_input_available(&self) {
+    fn wait_input_available(&self, ms: u32) -> u32{
         let frame = self.current_frame;
+        let num_iterations:u32 = 4;
+        let mut frame_wait: u32 = 0;
+        let mut wait_time: u32 = ms;
+
         loop {
             if self.p1_buffer.has_input(frame) && self.p2_buffer.has_input(frame) {
                 break;
             }
-            info!("SYNCING FRAME:{}", frame);
+            info!("SYNC: {}", frame);
+
+            frame_wait += 1;     
+            
+            if frame_wait == MAX_WAIT_TIME {
+                info!("Could Not Sync In Time");
+                panic!("Could Not Sync In Time");
+            }
+
+            thread::sleep(Duration::from_millis((ms / num_iterations) as u64));       
         }
+
+        // return the remaining wait time
+        if frame_wait > 0 && frame_wait <= num_iterations {
+            wait_time = ms - ((ms / num_iterations) * frame_wait);
+        } 
+
+        // we are spilling over our frame time make sure that we dont add extra delay
+        if frame_wait > num_iterations {
+            wait_time = 0;
+        }
+
+        wait_time
     }
 
     fn apply_input(&mut self) {
         let frame = self.current_frame;
-
         let p1 = self.p1_buffer.get_input(frame);
         let p2 = self.p2_buffer.get_input(frame);
 
@@ -170,6 +194,7 @@ struct SeqInput {
     delay_after: u32,
     player: u8,
 }
+
 impl SeqInput {
     fn new(btns: XButtons, hold: u32, player: u8, delay_after: u32) -> SeqInput {
         Self {
