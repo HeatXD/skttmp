@@ -6,7 +6,7 @@ const BUFFER_SIZE: i32 = 64;
 const DELAY: i32 = 5;
 const MAX_WAIT_TIME: u32 = 60 * 4 * 10; // 10 secs
 
-pub struct GameInput {
+struct GameInput {
     frame: i32,
     input: u16,
 }
@@ -20,7 +20,7 @@ impl GameInput {
     }
 }
 
-pub struct GameInputQueue {
+struct GameInputQueue {
     queue: Vec<GameInput>,
 }
 
@@ -57,7 +57,6 @@ impl GameInputQueue {
 
 pub struct GameInputHandler {
     current_frame: i32,
-    pad_client: Rc<Client>,
     p1_pad: Xbox360Wired<Rc<Client>>,
     p2_pad: Xbox360Wired<Rc<Client>>,
     p1_buffer: GameInputQueue,
@@ -68,27 +67,31 @@ pub struct GameInputHandler {
 
 impl Default for GameInputHandler {
     fn default() -> Self {
-        let client = Rc::new(vigem_client::Client::connect().unwrap());
-        let mut pad1 = vigem_client::Xbox360Wired::new(client.clone(), TargetId::XBOX360_WIRED);
-        let mut pad2 = vigem_client::Xbox360Wired::new(client.clone(), TargetId::XBOX360_WIRED);
+        if let Ok(client) = vigem_client::Client::connect() {
+            let cli = Rc::new(client);
+            let mut pad1 = vigem_client::Xbox360Wired::new(cli.clone(), TargetId::XBOX360_WIRED);
+            let mut pad2 = vigem_client::Xbox360Wired::new(cli.clone(), TargetId::XBOX360_WIRED);
 
-        pad1.plugin().unwrap();
-        pad1.wait_ready().unwrap();
-        info!("P1 PAD CONNECTED");
+            pad1.plugin().unwrap();
+            pad1.wait_ready().unwrap();
+            info!("P1 PAD CONNECTED");
 
-        pad2.plugin().unwrap();
-        pad2.wait_ready().unwrap();
-        info!("P2 PAD CONNECTED");
+            pad2.plugin().unwrap();
+            pad2.wait_ready().unwrap();
+            info!("P2 PAD CONNECTED");
 
-        Self {
-            current_frame: -1,
-            p1_buffer: GameInputQueue::new(),
-            p2_buffer: GameInputQueue::new(),
-            pad_client: client,
-            p1_pad: pad1,
-            p2_pad: pad2,
-            first_time: true,
-            init_sequence: InputSequence::init_game_seq(),
+            Self {
+                current_frame: -1,
+                p1_buffer: GameInputQueue::new(),
+                p2_buffer: GameInputQueue::new(),
+                p1_pad: pad1,
+                p2_pad: pad2,
+                first_time: true,
+                init_sequence: InputSequence::init_game_seq(),
+            }
+        } else {
+            info!("Failed to init GameInputHandler");
+            panic!("Failed to init GameInputHandler");
         }
     }
 }
@@ -97,14 +100,16 @@ impl GameInputHandler {
     pub fn on_hook_call(&mut self, ms: u32) -> u32 {
         let mut wait_time = ms;
         self.current_frame += 1;
+
         if self.first_time {
             self.do_init_sequence();
         }
+
         if self.current_frame >= 0 && !self.first_time {
             wait_time = self.wait_input_available(ms);
             self.apply_input();
         }
-        info!("C:{}/{}", self.current_frame, self.current_frame / 60);
+        // info!("C:{}/{}", self.current_frame, self.current_frame / 60);
         wait_time
     }
 
@@ -143,9 +148,9 @@ impl GameInputHandler {
         }
     }
 
-    fn wait_input_available(&self, ms: u32) -> u32{
+    fn wait_input_available(&self, ms: u32) -> u32 {
         let frame = self.current_frame;
-        let num_iterations:u32 = 4;
+        let num_iterations: u32 = 4;
         let mut frame_wait: u32 = 0;
         let mut wait_time: u32 = ms;
 
@@ -153,22 +158,20 @@ impl GameInputHandler {
             if self.p1_buffer.has_input(frame) && self.p2_buffer.has_input(frame) {
                 break;
             }
-            info!("SYNC: {}", frame);
 
-            frame_wait += 1;     
-            
+            frame_wait += 1;
             if frame_wait == MAX_WAIT_TIME {
-                info!("Could Not Sync In Time");
+                info!("Failed to Sync (f:{})", frame);
                 panic!("Could Not Sync In Time");
             }
 
-            thread::sleep(Duration::from_millis((ms / num_iterations) as u64));       
+            thread::sleep(Duration::from_millis((ms / num_iterations) as u64));
         }
 
         // return the remaining wait time
         if frame_wait > 0 && frame_wait <= num_iterations {
             wait_time = ms - ((ms / num_iterations) * frame_wait);
-        } 
+        }
 
         // we are spilling over our frame time make sure that we dont add extra delay
         if frame_wait > num_iterations {
