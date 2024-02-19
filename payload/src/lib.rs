@@ -6,6 +6,5 @@ mod input;
 
 #[ctor::ctor]
 fn init() {
-   // info!("Starting Comms");
     run_comms();
 }

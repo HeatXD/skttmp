@@ -1,20 +1,23 @@
-use color_eyre;
+#![windows_subsystem = "windows"]
+
 use device_query::{DeviceQuery, DeviceState};
 use inject::inject_payload;
+use macroquad::color::*;
+use macroquad::input::is_quit_requested;
+use macroquad::math::vec2;
 use macroquad::miniquad::window::set_window_size;
-use macroquad::prelude::*;
 use macroquad::ui::{hash, root_ui, widgets};
+use macroquad::window::{clear_background, next_frame};
 use ui_state::UIState;
 
 mod inject;
+mod log;
 mod ui_state;
 
 #[macroquad::main("SKTTMP")]
-async fn main() -> color_eyre::Result<()> {
+async fn main() {
     set_window_size(500, 250);
-
     let mut ui_state = UIState::default();
-
     let device_state = DeviceState::new();
 
     while !is_quit_requested() {
@@ -22,13 +25,11 @@ async fn main() -> color_eyre::Result<()> {
         draw_ui(&mut ui_state, &device_state);
         next_frame().await;
     }
-
-    Ok(())
 }
 
 fn draw_ui(ui_state: &mut UIState, device_state: &DeviceState) {
     if ui_state.wait_for_input {
-        widgets::Window::new(hash!(), vec2(50., 0.), vec2(400., 250.))
+        widgets::Window::new(hash!(), vec2(0., 0.), vec2(500., 250.))
             .label(&format!(
                 "WAITING TO BIND ACTION: {}",
                 ui_state.last_bind_action
@@ -36,15 +37,15 @@ fn draw_ui(ui_state: &mut UIState, device_state: &DeviceState) {
             .titlebar(true)
             .movable(false)
             .ui(&mut *root_ui(), |ui| {
-                if ui.button(vec2(0., 215.), "CANCEL") {
+                if ui.button(vec2(0., 215.), "Cancel") {
                     ui_state.wait_for_input = false;
                 }
             });
         let keys = device_state.get_keys();
-        if keys.len() != 0 {
-            map_key_to_action(keys[0], ui_state);
+        if let Some(key) = keys.first() {
+            map_key_to_action(key, ui_state);
             ui_state.wait_for_input = false;
-        }
+        };
         return;
     }
 
@@ -59,10 +60,12 @@ fn draw_ui(ui_state: &mut UIState, device_state: &DeviceState) {
             ui.input_text(hash!(), "LOCAL PORT", &mut ui_state.local_port);
             ui.input_text(hash!(), "REMOTE IP:PORT", &mut ui_state.remote_addrs);
 
-            if ui.button(vec2(10., 110.), "Connect") {}
+            if ui.button(vec2(10., 110.), "Connect") {
+                ui_state.last_logs.clear();
+            }
             if ui.button(vec2(150., 110.), "Start Netplay") {
-                if let Err(err) = inject_payload(&ui_state.proc_name, &ui_state.payload_path) {
-                    println!("{}", err);
+                if let Err(err) = inject_payload(ui_state) {
+                    ui_state.last_logs.add(format!("{}", err));
                 }
             }
         });
@@ -72,10 +75,10 @@ fn draw_ui(ui_state: &mut UIState, device_state: &DeviceState) {
         .titlebar(true)
         .movable(false)
         .ui(&mut *root_ui(), |ui| {
-            ui.label(vec2(60., 0.), &format!("{:?}", ui_state.keymap.up));
-            ui.label(vec2(60., 25.), &format!("{:?}", ui_state.keymap.down));
-            ui.label(vec2(60., 50.), &format!("{:?}", ui_state.keymap.left));
-            ui.label(vec2(60., 75.), &format!("{:?}", ui_state.keymap.right));
+            ui.label(vec2(60., 0.), &format!("= {:?}", ui_state.keymap.up));
+            ui.label(vec2(60., 25.), &format!("= {:?}", ui_state.keymap.down));
+            ui.label(vec2(60., 50.), &format!("= {:?}", ui_state.keymap.left));
+            ui.label(vec2(60., 75.), &format!("= {:?}", ui_state.keymap.right));
 
             if ui.button(vec2(10., 0.), "UP") {
                 ui_state.wait_for_input = true;
@@ -99,15 +102,23 @@ fn draw_ui(ui_state: &mut UIState, device_state: &DeviceState) {
         .label("Logging")
         .titlebar(true)
         .movable(false)
-        .ui(&mut *root_ui(), |_ui| {});
+        .ui(&mut *root_ui(), |ui| {
+            for log in ui_state.last_logs.get_all() {
+                ui.label(None, log);
+            }
+        });
 }
 
-fn map_key_to_action(key: device_query::Keycode, ui_state: &mut UIState) {
-    match ui_state.last_bind_action.as_str() {
-        "UP" => ui_state.keymap.up = key,
-        "DOWN" => ui_state.keymap.down = key,
-        "LEFT" => ui_state.keymap.left = key,
-        "RIGHT" => ui_state.keymap.right = key,
+fn map_key_to_action(key: &device_query::Keycode, ui_state: &mut UIState) {
+    let action = ui_state.last_bind_action.as_str();
+    match action {
+        "UP" => ui_state.keymap.up = *key,
+        "DOWN" => ui_state.keymap.down = *key,
+        "LEFT" => ui_state.keymap.left = *key,
+        "RIGHT" => ui_state.keymap.right = *key,
         _ => println!("Invalid Action."),
     }
+    ui_state
+        .last_logs
+        .add(format!("{} has been binded to {:?}", action, key));
 }

@@ -1,3 +1,4 @@
+use crate::log::Logs;
 use device_query::Keycode;
 
 pub struct UIState {
@@ -9,6 +10,7 @@ pub struct UIState {
     pub keymap: InputMap,
     pub wait_for_input: bool,
     pub last_bind_action: String,
+    pub last_logs: Logs,
 }
 
 impl Default for UIState {
@@ -22,6 +24,7 @@ impl Default for UIState {
             keymap: InputMap::default(),
             wait_for_input: false,
             last_bind_action: String::default(),
+            last_logs: Logs::default(),
         }
     }
 }

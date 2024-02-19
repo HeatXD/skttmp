@@ -2,7 +2,7 @@ use retour::GenericDetour;
 use tracing::info;
 use winapi::um::libloaderapi::GetProcAddress;
 
-use crate::{input::GameInputHandler, mem::{collect_mem_items, get_base_addr_and_hook}};
+use crate::{input::GameInputHandler, mem::get_base_addr_and_hook};
 
 // techincally quite bad practice but we doin it..
 static mut DETOUR: Option<GenericDetour<extern "cdecl" fn(u32)>> = None;
@@ -22,7 +22,7 @@ pub fn run_comms() {
                 if let Ok(_) = hook.enable() {
                     info!("Hooked!");
                     DETOUR = Some(hook);
-                    collect_mem_items(base_address);
+                    // collect_mem_items(base_address);
                 }
             } else {
                 info!("Hook Failed!");
