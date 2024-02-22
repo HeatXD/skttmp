@@ -8,10 +8,12 @@ use macroquad::math::vec2;
 use macroquad::miniquad::window::set_window_size;
 use macroquad::ui::{hash, root_ui, widgets};
 use macroquad::window::{clear_background, next_frame};
+use net::NetMgr;
 use ui_state::UIState;
 
 mod inject;
 mod log;
+mod net;
 mod ui_state;
 
 #[macroquad::main("SKTTMP")]
@@ -19,12 +21,19 @@ async fn main() {
     set_window_size(500, 250);
     let mut ui_state = UIState::default();
     let device_state = DeviceState::new();
+    let mut net_mgr = NetMgr::init(&mut ui_state);
 
     while !is_quit_requested() {
+        handle_network(&mut net_mgr, &device_state, &mut ui_state);
         clear_background(WHITE);
         draw_ui(&mut ui_state, &device_state);
         next_frame().await;
     }
+}
+
+fn handle_network(net_mgr: &mut NetMgr, device_state: &DeviceState, ui_state: &mut UIState) {
+    net_mgr.handle_events(ui_state);
+    net_mgr.send_input(device_state);
 }
 
 fn draw_ui(ui_state: &mut UIState, device_state: &DeviceState) {
@@ -57,13 +66,12 @@ fn draw_ui(ui_state: &mut UIState, device_state: &DeviceState) {
             ui.input_text(hash!(), "PROCESS NAME", &mut ui_state.proc_name);
             ui.input_text(hash!(), "PAYLOAD PATH", &mut ui_state.payload_path);
             ui.input_text(hash!(), "LOCAL PLAYER", &mut ui_state.local_player);
-            ui.input_text(hash!(), "LOCAL PORT", &mut ui_state.local_port);
             ui.input_text(hash!(), "REMOTE IP:PORT", &mut ui_state.remote_addrs);
 
-            if ui.button(vec2(10., 110.), "Connect") {
+            if ui.button(vec2(10., 100.), "Connect") {
                 ui_state.last_logs.clear();
             }
-            if ui.button(vec2(150., 110.), "Start Netplay") {
+            if ui.button(vec2(150., 100.), "Start Netplay") {
                 if let Err(err) = inject_payload(ui_state) {
                     ui_state.last_logs.add(format!("{}", err));
                 }
